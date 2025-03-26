@@ -23,19 +23,27 @@ public class Fredis {
         final int redisPoolMinIdle = 5;
         final String redisMode = "cluster";
         int redisWriteBufferBatchSize = 100;
+        int outOfOrdernessThresholdInSecs = 15;
 
         final MapFunction<String, Map<String, Object>> eventMapper = new EventMapper();
         Configs configs = Configs.builder().redisUrl(redisUrl).redisUsername(redisUsername).redisPassword(redisPassword)
                 .redisPort(redisPort).redisPoolMaxcConnections(redisPoolMaxcConnections).redisPoolMaxIdle(redisPoolMaxIdle)
                 .redisPoolMinIdle(redisPoolMinIdle).redisMode(redisMode).batchSize(redisWriteBufferBatchSize).build();
-        final ProcessFunction<Map<String, Object>, String> redisSinkConnector = new RedisSinkConnector(configs);
         // Example DataStream
         List<Event> events = new ArrayList<>();
         DataStream<String> dataStream = env.fromElements(events.toString())
-                .assignTimestampsAndWatermarks(WatermarkStrategy.forBoundedOutOfOrderness(Duration.ofSeconds(5)));
+                .assignTimestampsAndWatermarks(WatermarkStrategy.forBoundedOutOfOrderness(Duration.ofSeconds(outOfOrdernessThresholdInSecs)));
+
+        final ProcessFunction<Map<String, Object>, String> redisSinkConnector = new RedisSinkConnector(configs);
         dataStream.map(eventMapper).name("event-mapper")
                         .keyBy(obj -> obj.get("_key"))
                         .process(redisSinkConnector).name("redis-connector");
+
+        final ProcessFunction<Map<String, Object>, String> redisStreamsSinkConnector = new RedisStreamsSinkConnector(configs);
+        dataStream.map(eventMapper).name("event-mapper")
+                .keyBy(obj -> obj.get("_key"))
+                .process(redisStreamsSinkConnector).name("redis-streams-connector");
+
         env.execute("FREDIS - Flink Redis Sink Writer");
     }
 }
