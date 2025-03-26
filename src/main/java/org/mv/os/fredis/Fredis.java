@@ -1,7 +1,6 @@
 package org.mv.os.fredis;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.MapFunction;
-import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
@@ -35,12 +34,12 @@ public class Fredis {
                 .assignTimestampsAndWatermarks(WatermarkStrategy.forBoundedOutOfOrderness(Duration.ofSeconds(outOfOrdernessThresholdInSecs)));
 
         final ProcessFunction<Map<String, Object>, String> redisSinkConnector = new RedisSinkConnector(configs);
-        dataStream.map(eventMapper).name("event-mapper")
+        dataStream.map(eventMapper).name("event-mapper").filter(new NullFilter<>())
                         .keyBy(obj -> obj.get("_key"))
                         .process(redisSinkConnector).name("redis-connector");
 
         final ProcessFunction<Map<String, Object>, String> redisStreamsSinkConnector = new RedisStreamsSinkConnector(configs);
-        dataStream.map(eventMapper).name("event-mapper")
+        dataStream.map(eventMapper).name("event-mapper").filter(new NullFilter<>())
                 .keyBy(obj -> obj.get("_key"))
                 .process(redisStreamsSinkConnector).name("redis-streams-connector");
 
