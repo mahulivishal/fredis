@@ -4,6 +4,7 @@ import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
+import org.mv.os.fredis.source.RedisStreamSource;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -28,18 +29,29 @@ public class Fredis {
         Configs configs = Configs.builder().redisUrl(redisUrl).redisUsername(redisUsername).redisPassword(redisPassword)
                 .redisPort(redisPort).redisPoolMaxcConnections(redisPoolMaxcConnections).redisPoolMaxIdle(redisPoolMaxIdle)
                 .redisPoolMinIdle(redisPoolMinIdle).redisMode(redisMode).batchSize(redisWriteBufferBatchSize).build();
+
         // Example DataStream
         List<Event> events = new ArrayList<>();
         DataStream<String> dataStream = env.fromElements(events.toString())
                 .assignTimestampsAndWatermarks(WatermarkStrategy.forBoundedOutOfOrderness(Duration.ofSeconds(outOfOrdernessThresholdInSecs)));
 
+        // Example Redis Sink Connector
         final ProcessFunction<Map<String, Object>, String> redisSinkConnector = new RedisSinkConnector(configs);
         dataStream.map(eventMapper).name("event-mapper").filter(new NullFilter<>())
                         .keyBy(obj -> obj.get("_key"))
                         .process(redisSinkConnector).name("redis-connector");
 
+        // Example Redis Streams Sink Connector
         final ProcessFunction<Map<String, Object>, String> redisStreamsSinkConnector = new RedisStreamsSinkConnector(configs);
         dataStream.map(eventMapper).name("event-mapper").filter(new NullFilter<>())
+                .keyBy(obj -> obj.get("_key"))
+                .process(redisStreamsSinkConnector).name("redis-streams-connector");
+
+        // Example Redis Streams Source Connector with Redis Streams Sink Connector
+        List<String> redisStreamEvents = new ArrayList<>();
+        RedisStreamSource redisSource = new RedisStreamSource(redisStreamEvents);
+        DataStream<String> stream = env.fromSource(redisSource, WatermarkStrategy.forBoundedOutOfOrderness(Duration.ofSeconds(outOfOrdernessThresholdInSecs)), "redis-stream-source");
+        stream.map(eventMapper).name("redis-stream-event-mapper").filter(new NullFilter<>())
                 .keyBy(obj -> obj.get("_key"))
                 .process(redisStreamsSinkConnector).name("redis-streams-connector");
 
