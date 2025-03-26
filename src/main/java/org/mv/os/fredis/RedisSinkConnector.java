@@ -28,53 +28,34 @@ public class RedisSinkConnector extends ProcessFunction<Map<String, Object>, Str
     private transient GenericObjectPool<StatefulRedisClusterConnection<String, String>> redisClusterConnectionPool;
     private transient GenericObjectPool<StatefulRedisConnection<String, String>> redisConnectionPool;
     private final List<Map<String, Object>> buffer = new ArrayList<>();
-    private static final String REDIS_KEY_SPACE_PREFIX = "vehicle_snapshot_";
-    private static final String REDIS_CLUSTER_MODE = "cluster";
-    private final int batchSize; // Number of records per bulk write
-    private final String redisUrl;
-    private final String redisUsername;
-    private final String redisPassword;
-    private final int redisPort;
-    private final int redisPoolMaxcConnections;
-    private final int redisPoolMaxIdle;
-    private final int redisPoolMinIdle;
-    private final String redisMode;
+    private Configs configs;
 
-    public RedisSinkConnector(int batchSize, String redisUrl, int redisPort, int redisPoolMaxcConnections, int redisPoolMaxIdle, int redisPoolMinIdle, String redisUsername, String redisPassword, String redisMode) {
-        this.batchSize = batchSize;
-        this.redisUrl = redisUrl;
-        this.redisPort = redisPort;
-        this.redisPoolMaxcConnections = redisPoolMaxcConnections;
-        this.redisPoolMaxIdle = redisPoolMaxIdle;
-        this.redisPoolMinIdle = redisPoolMinIdle;
-        this.redisUsername = redisUsername;
-        this.redisPassword = redisPassword;
-        this.redisMode = redisMode;
+    public RedisSinkConnector(Configs configs) {
+        this.configs = configs;
     }
 
     @Override
     public void open(Configuration parameters) throws Exception {
         super.open(parameters);
         // Configure the connection pool
-        if (redisMode.equals(REDIS_CLUSTER_MODE))
+        if (configs.getRedisMode().equals(Constants.REDIS_CLUSTER_MODE))
             redisClusterConnectionPool = getRedisClusterConnectionPool();
         else
             redisConnectionPool = getRedisConnectionPool();
-        log.info("redisUrl, redisPort, redisUsername, redisPassword, redisMode: {}, {}, {}, {}, {}", redisUrl, redisPort, redisUsername, redisPassword, redisMode);
     }
 
     private GenericObjectPool<StatefulRedisClusterConnection<String, String>> getRedisClusterConnectionPool() {
-        log.info("Connecting to Redis Cluster at: {}", redisUrl);
+        log.info("Connecting to Redis Cluster at: {}", configs.getRedisUrl());
         try {
             GenericObjectPoolConfig<StatefulRedisClusterConnection<String, String>> poolConfig = new GenericObjectPoolConfig<>();
-            poolConfig.setMaxTotal(redisPoolMaxcConnections); // Maximum number of connections in the pool
-            poolConfig.setMaxIdle(redisPoolMaxIdle);   // Maximum number of idle connections
-            poolConfig.setMinIdle(redisPoolMinIdle);
-            String[] redisNodes = redisUrl.split(",");
+            poolConfig.setMaxTotal(configs.getRedisPoolMaxcConnections()); // Maximum number of connections in the pool
+            poolConfig.setMaxIdle(configs.getRedisPoolMaxIdle());   // Maximum number of idle connections
+            poolConfig.setMinIdle(configs.getRedisPoolMinIdle());
+            String[] redisNodes = configs.getRedisUrl().split(",");
             List<RedisURI> redisNodeConnections = new ArrayList<>();
             for (String node : redisNodes) {
-                RedisURI redisUri = RedisURI.builder().withHost(node).withPort(redisPort)
-                        .withAuthentication(redisUsername, redisPassword.toCharArray()).withSsl(true).build();
+                RedisURI redisUri = RedisURI.builder().withHost(node).withPort(configs.getRedisPort())
+                        .withAuthentication(configs.getRedisUsername(), configs.getRedisPassword().toCharArray()).withSsl(true).build();
                 redisNodeConnections.add(redisUri);
             }
             RedisClusterClient redisClient = RedisClusterClient.create(redisNodeConnections);
@@ -86,14 +67,14 @@ public class RedisSinkConnector extends ProcessFunction<Map<String, Object>, Str
     }
 
     private GenericObjectPool<StatefulRedisConnection<String, String>> getRedisConnectionPool() {
-        log.info("Connecting to Standalone Redis at: {}", redisUrl);
+        log.info("Connecting to Standalone Redis at: {}", configs.getRedisUrl());
         try {
             GenericObjectPoolConfig<StatefulRedisConnection<String, String>> poolConfig = new GenericObjectPoolConfig<>();
-            poolConfig.setMaxTotal(redisPoolMaxcConnections); // Maximum number of connections in the pool
-            poolConfig.setMaxIdle(redisPoolMaxIdle);   // Maximum number of idle connections
-            poolConfig.setMinIdle(redisPoolMinIdle);
-            RedisURI redisUri = RedisURI.builder().withHost(redisUrl).withPort(redisPort)
-                    .withAuthentication(redisUsername, redisPassword.toCharArray()).withSsl(true)
+            poolConfig.setMaxTotal(configs.getRedisPoolMaxcConnections()); // Maximum number of connections in the pool
+            poolConfig.setMaxIdle(configs.getRedisPoolMaxIdle());   // Maximum number of idle connections
+            poolConfig.setMinIdle(configs.getRedisPoolMinIdle());
+            RedisURI redisUri = RedisURI.builder().withHost(configs.getRedisUrl()).withPort(configs.getRedisPort())
+                    .withAuthentication(configs.getRedisUsername(), configs.getRedisPassword().toCharArray()).withSsl(true)
                     .withTimeout(Duration.ofSeconds(30)).build();
             RedisClient redisClient = RedisClient.create(redisUri);
             return ConnectionPoolSupport.createGenericObjectPool(redisClient::connect, poolConfig);
@@ -107,9 +88,9 @@ public class RedisSinkConnector extends ProcessFunction<Map<String, Object>, Str
     @Override
     public void processElement(Map<String, Object> record, Context ctx, Collector<String> out) throws Exception {
         if (!record.containsKey("_key")) return;
-        log.info("record: {}", record);
+        log.debug("record: {}", record);
         buffer.add(record);
-        if (buffer.size() >= batchSize) {
+        if (buffer.size() >= configs.getBatchSize()) {
             flushToRedis();
         }
     }
@@ -117,13 +98,13 @@ public class RedisSinkConnector extends ProcessFunction<Map<String, Object>, Str
     private void flushToRedis() throws Exception {
         if (buffer.isEmpty()) return;
         // Borrowing a Redis connection from the pool
-        if (redisMode.equals(REDIS_CLUSTER_MODE) && null != redisClusterConnectionPool) {
+        if (configs.getRedisMode().equals(Constants.REDIS_CLUSTER_MODE) && null != redisClusterConnectionPool) {
             try (StatefulRedisClusterConnection<String, String> connection = redisClusterConnectionPool.borrowObject()) {
                 RedisAdvancedClusterAsyncCommands<String, String> asyncCommands = connection.async();
                 // Using pipelining for bulk HSET writes
                 List<CompletableFuture<?>> futures = new ArrayList<>();
                 for (Map<String, Object> record : buffer) {
-                    String hashKey = REDIS_KEY_SPACE_PREFIX + record.get("_key").toString();
+                    String hashKey = Constants.REDIS_KEY_SPACE_PREFIX + record.get("_key").toString();
                     for (String field : record.keySet())
                         futures.add(asyncCommands.hset(hashKey, field, record.get(field).toString()).toCompletableFuture());
                 }
@@ -133,13 +114,13 @@ public class RedisSinkConnector extends ProcessFunction<Map<String, Object>, Str
                 buffer.clear();
             }
         } else {
-            if (!redisMode.equals(REDIS_CLUSTER_MODE) && null != redisConnectionPool) {
+            if (!configs.getRedisMode().equals(Constants.REDIS_CLUSTER_MODE) && null != redisConnectionPool) {
                 try (StatefulRedisConnection<String, String> connection = redisConnectionPool.borrowObject()) {
                     RedisAsyncCommands<String, String> asyncCommands = connection.async();
                     // Using pipelining for bulk HSET writes
                     List<CompletableFuture<?>> futures = new ArrayList<>();
                     for (Map<String, Object> record : buffer) {
-                        String hashKey = REDIS_KEY_SPACE_PREFIX + record.get("_key").toString();
+                        String hashKey = Constants.REDIS_KEY_SPACE_PREFIX + record.get("_key").toString();
                         for (String field : record.keySet())
                             futures.add(asyncCommands.hset(hashKey, field, record.get(field).toString()).toCompletableFuture());
                     }

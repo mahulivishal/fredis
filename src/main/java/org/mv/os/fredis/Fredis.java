@@ -25,7 +25,10 @@ public class Fredis {
         int redisWriteBufferBatchSize = 100;
 
         final MapFunction<String, Map<String, Object>> eventMapper = new EventMapper();
-        final ProcessFunction<Map<String, Object>, String> redisSinkConnector = new RedisSinkConnector(redisWriteBufferBatchSize, redisUrl, redisPort, redisPoolMaxcConnections, redisPoolMaxIdle, redisPoolMinIdle, redisUsername, redisPassword, redisMode);
+        Configs configs = Configs.builder().redisUrl(redisUrl).redisUsername(redisUsername).redisPassword(redisPassword)
+                .redisPort(redisPort).redisPoolMaxcConnections(redisPoolMaxcConnections).redisPoolMaxIdle(redisPoolMaxIdle)
+                .redisPoolMinIdle(redisPoolMinIdle).redisMode(redisMode).batchSize(redisWriteBufferBatchSize).build();
+        final ProcessFunction<Map<String, Object>, String> redisSinkConnector = new RedisSinkConnector(configs);
         // Example DataStream
         List<Event> events = new ArrayList<>();
         DataStream<String> dataStream = env.fromElements(events.toString())
