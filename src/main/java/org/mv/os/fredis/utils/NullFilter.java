@@ -1,4 +1,4 @@
-package org.mv.os.fredis;
+package org.mv.os.fredis.utils;
 
 import org.apache.flink.api.common.functions.FilterFunction;
 

@@ -1,4 +1,4 @@
-package org.mv.os.fredis;
+package org.mv.os.fredis.sink;
 
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.RedisURI;
@@ -11,12 +11,13 @@ import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.util.Collector;
+import org.mv.os.fredis.config.Configs;
+import org.mv.os.fredis.config.Constants;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 @Slf4j
 public class RedisStreamsSinkConnector extends ProcessFunction<Map<String, Object>, String> {

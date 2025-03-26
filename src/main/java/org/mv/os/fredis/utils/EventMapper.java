@@ -1,10 +1,9 @@
-package org.mv.os.fredis;
+package org.mv.os.fredis.utils;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 
-import java.util.HashMap;
 import java.util.Map;
 
 @Slf4j

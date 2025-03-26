@@ -1,4 +1,4 @@
-package org.mv.os.fredis;
+package org.mv.os.fredis.config;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

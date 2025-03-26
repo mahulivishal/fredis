@@ -1,6 +1,5 @@
-package org.mv.os.fredis;
+package org.mv.os.fredis.utils;
 
-import jdk.jfr.DataAmount;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
