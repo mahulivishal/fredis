@@ -2,6 +2,7 @@ package org.mv.os.fredis.source;
 
 import org.apache.flink.api.connector.source.SplitEnumerator;
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
+import org.mv.os.fredis.config.InternalConfigs;
 
 import javax.annotation.Nullable;
 import java.util.HashMap;
@@ -19,12 +20,13 @@ public class RedisStreamSplitEnumerator implements SplitEnumerator<RedisStreamSp
         this.context = context;
         this.streamKeys = streamKeys;
     }
+
     @Override
     public void start() {
         // Assign one split per reader
         int i = 0;
         for (String streamKey : streamKeys) {
-            context.assignSplit(new RedisStreamSplit(streamKey, "0-0"), i % context.currentParallelism());
+            context.assignSplit(new RedisStreamSplit(streamKey, InternalConfigs.initialSplitOffset), i % context.currentParallelism());
             i++;
         }
     }
@@ -40,14 +42,12 @@ public class RedisStreamSplitEnumerator implements SplitEnumerator<RedisStreamSp
     }
 
     @Override
-    public void addReader(int i) {
-
-    }
+    public void addReader(int i) { }
 
     @Override
     public List<RedisStreamSplit> snapshotState(long checkpointId) {
         return streamKeys.stream()
-                .map(key -> new RedisStreamSplit(key, "0-0"))
+                .map(key -> new RedisStreamSplit(key, InternalConfigs.initialSplitOffset))
                 .collect(Collectors.toList());
     }
     @Override

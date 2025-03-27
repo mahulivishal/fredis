@@ -50,7 +50,7 @@ public class RedisStreamsSinkConnector extends ProcessFunction<Map<String, Objec
             poolConfig.setMinIdle(configs.getRedisPoolMinIdle());
             RedisURI redisUri = RedisURI.builder().withHost(configs.getRedisUrl()).withPort(configs.getRedisPort())
                     .withAuthentication(configs.getRedisUsername(), configs.getRedisPassword().toCharArray()).withSsl(true)
-                    .withTimeout(Duration.ofSeconds(30)).build();
+                    .withTimeout(Duration.ofSeconds(configs.getConnectionTimeoutInSec())).build();
             RedisClient redisClient = RedisClient.create(redisUri);
             return ConnectionPoolSupport.createGenericObjectPool(redisClient::connect, poolConfig);
         } catch (Exception e) {

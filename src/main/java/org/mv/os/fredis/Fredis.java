@@ -30,11 +30,13 @@ public class Fredis {
         final String redisMode = "cluster";
         int redisWriteBufferBatchSize = 100;
         int outOfOrdernessThresholdInSecs = 15;
+        int connectionTimeoutInSec = 30;
 
         final MapFunction<String, Map<String, Object>> eventMapper = new EventMapper();
         Configs configs = Configs.builder().redisUrl(redisUrl).redisUsername(redisUsername).redisPassword(redisPassword)
                 .redisPort(redisPort).redisPoolMaxcConnections(redisPoolMaxcConnections).redisPoolMaxIdle(redisPoolMaxIdle)
-                .redisPoolMinIdle(redisPoolMinIdle).redisMode(redisMode).batchSize(redisWriteBufferBatchSize).build();
+                .redisPoolMinIdle(redisPoolMinIdle).redisMode(redisMode).batchSize(redisWriteBufferBatchSize)
+                .connectionTimeoutInSec(connectionTimeoutInSec).build();
 
         // Example DataStream
         List<Event> events = new ArrayList<>();
@@ -55,7 +57,7 @@ public class Fredis {
 
         // Example Redis Streams Source Connector with Redis Streams Sink Connector
         List<String> redisStreamEvents = new ArrayList<>();
-        RedisStreamSource redisSource = new RedisStreamSource(redisStreamEvents);
+        RedisStreamSource redisSource = new RedisStreamSource(redisStreamEvents, configs);
         DataStream<String> stream = env.fromSource(redisSource, WatermarkStrategy.forBoundedOutOfOrderness(Duration.ofSeconds(outOfOrdernessThresholdInSecs)), "redis-stream-source");
         stream.map(eventMapper).name("redis-stream-event-mapper").filter(new NullFilter<>())
                 .keyBy(obj -> obj.get("_key"))

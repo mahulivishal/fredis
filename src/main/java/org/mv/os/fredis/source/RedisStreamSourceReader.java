@@ -1,6 +1,7 @@
 package org.mv.os.fredis.source;
 
 import io.lettuce.core.RedisClient;
+import io.lettuce.core.RedisURI;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.api.sync.RedisCommands;
 import io.lettuce.core.StreamMessage;
@@ -9,6 +10,9 @@ import org.apache.flink.api.connector.source.SourceReader;
 import org.apache.flink.api.connector.source.SourceReaderContext;
 import org.apache.flink.api.connector.source.ReaderOutput;
 import org.apache.flink.core.io.InputStatus;
+import org.mv.os.fredis.config.Configs;
+import org.mv.os.fredis.config.Constants;
+import org.mv.os.fredis.config.InternalConfigs;
 
 import java.time.Duration;
 import java.util.*;
@@ -22,9 +26,12 @@ public class RedisStreamSourceReader implements SourceReader<String, RedisStream
     private final StatefulRedisConnection<String, String> connection;
     private final RedisCommands<String, String> commands;
 
-    public RedisStreamSourceReader(SourceReaderContext context) {
+    public RedisStreamSourceReader(SourceReaderContext context, Configs configs) {
         this.context = context;
-        this.redisClient = RedisClient.create("redis://localhost:6379");
+        RedisURI redisUri = RedisURI.builder().withHost(configs.getRedisUrl()).withPort(configs.getRedisPort())
+                .withAuthentication(configs.getRedisUsername(), configs.getRedisPassword().toCharArray()).withSsl(true)
+                .withTimeout(Duration.ofSeconds(configs.getConnectionTimeoutInSec())).build();
+        this.redisClient = RedisClient.create(redisUri);
         this.connection = redisClient.connect();
         this.commands = connection.sync();
     }
@@ -35,14 +42,14 @@ public class RedisStreamSourceReader implements SourceReader<String, RedisStream
     public InputStatus pollNext(ReaderOutput<String> output) throws Exception {
         RedisStreamSplit split = assignedSplits.peek();
         if (split == null) {
-            Thread.sleep(100); // avoid tight loop
+            Thread.sleep(InternalConfigs.sourceReaderPollIntervalInMS); // avoid tight loop
             return InputStatus.NOTHING_AVAILABLE;
         }
         String stream = split.getStreamKey();
         String offset = split.getOffset();
         // Read 10 messages max from the stream
         List<StreamMessage<String, String>> messages = commands.xread(
-                XReadArgs.Builder.count(10).block(Duration.ofMillis(100)),
+                XReadArgs.Builder.count(InternalConfigs.readBufferMaxSize).block(Duration.ofMillis(InternalConfigs.sourceReaderPollIntervalInMS)),
                 XReadArgs.StreamOffset.from(stream, offset)
         );
         if (messages == null || messages.isEmpty()) {

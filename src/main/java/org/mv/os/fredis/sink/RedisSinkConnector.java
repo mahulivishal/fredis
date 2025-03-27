@@ -56,7 +56,8 @@ public class RedisSinkConnector extends ProcessFunction<Map<String, Object>, Str
             List<RedisURI> redisNodeConnections = new ArrayList<>();
             for (String node : redisNodes) {
                 RedisURI redisUri = RedisURI.builder().withHost(node).withPort(configs.getRedisPort())
-                        .withAuthentication(configs.getRedisUsername(), configs.getRedisPassword().toCharArray()).withSsl(true).build();
+                        .withAuthentication(configs.getRedisUsername(), configs.getRedisPassword().toCharArray()).withSsl(true)
+                        .withTimeout(Duration.ofSeconds(configs.getConnectionTimeoutInSec())).build();
                 redisNodeConnections.add(redisUri);
             }
             RedisClusterClient redisClient = RedisClusterClient.create(redisNodeConnections);
@@ -76,7 +77,7 @@ public class RedisSinkConnector extends ProcessFunction<Map<String, Object>, Str
             poolConfig.setMinIdle(configs.getRedisPoolMinIdle());
             RedisURI redisUri = RedisURI.builder().withHost(configs.getRedisUrl()).withPort(configs.getRedisPort())
                     .withAuthentication(configs.getRedisUsername(), configs.getRedisPassword().toCharArray()).withSsl(true)
-                    .withTimeout(Duration.ofSeconds(30)).build();
+                    .withTimeout(Duration.ofSeconds(configs.getConnectionTimeoutInSec())).build();
             RedisClient redisClient = RedisClient.create(redisUri);
             return ConnectionPoolSupport.createGenericObjectPool(redisClient::connect, poolConfig);
         } catch (Exception e) {

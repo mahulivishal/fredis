@@ -19,5 +19,6 @@ public class Configs {
     int redisPoolMaxIdle;
     int redisPoolMinIdle;
     String redisMode;
+    int connectionTimeoutInSec;
 
 }
