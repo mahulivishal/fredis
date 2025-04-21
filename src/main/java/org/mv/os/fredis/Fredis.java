@@ -31,20 +31,22 @@ public class Fredis {
         int redisWriteBufferBatchSize = 100;
         int outOfOrdernessThresholdInSecs = 15;
         int connectionTimeoutInSec = 30;
+        int sinkIntervalInMS = 30;
+        boolean enableUpsertPerKey = true;
 
-        final MapFunction<String, Map<String, Object>> eventMapper = new EventMapper();
         Configs configs = Configs.builder().redisUrl(redisUrl).redisUsername(redisUsername).redisPassword(redisPassword)
                 .redisPort(redisPort).redisPoolMaxcConnections(redisPoolMaxcConnections).redisPoolMaxIdle(redisPoolMaxIdle)
                 .redisPoolMinIdle(redisPoolMinIdle).redisMode(redisMode).batchSize(redisWriteBufferBatchSize)
-                .connectionTimeoutInSec(connectionTimeoutInSec).build();
+                .connectionTimeoutInSec(connectionTimeoutInSec).sinkTimerIntervalInMS(sinkIntervalInMS).enableEventUpsertPerKey(enableUpsertPerKey).build();
 
         // Example DataStream
         List<Event> events = new ArrayList<>();
         DataStream<String> dataStream = env.fromElements(events.toString())
                 .assignTimestampsAndWatermarks(WatermarkStrategy.forBoundedOutOfOrderness(Duration.ofSeconds(outOfOrdernessThresholdInSecs)));
+        final MapFunction<String, Map<String, Object>> eventMapper = new EventMapper();
 
         // Example Redis Sink Connector
-        final ProcessFunction<Map<String, Object>, String> redisSinkConnector = new RedisSinkConnector(configs);
+        final ProcessFunction<Map<String, Object>, Void> redisSinkConnector = new RedisSinkConnector(configs);
         dataStream.map(eventMapper).name("event-mapper").filter(new NullFilter<>())
                         .keyBy(obj -> obj.get("_key"))
                         .process(redisSinkConnector).name("redis-connector");

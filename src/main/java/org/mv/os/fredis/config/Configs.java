@@ -20,5 +20,6 @@ public class Configs {
     int redisPoolMinIdle;
     String redisMode;
     int connectionTimeoutInSec;
-
+    long sinkTimerIntervalInMS;
+    boolean enableEventUpsertPerKey;
 }
